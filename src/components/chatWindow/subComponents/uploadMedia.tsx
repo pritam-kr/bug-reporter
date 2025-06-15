@@ -29,6 +29,8 @@ const UploadMedia: React.FC<UploadMediaProps> = ({setMediaFile, mediaFile, onCha
     console.log('Using media file:', mediaFile);
   };
 
+
+
   const renderPreview = () => {
     if (!mediaFile) return null;
 
@@ -56,6 +58,7 @@ const UploadMedia: React.FC<UploadMediaProps> = ({setMediaFile, mediaFile, onCha
 
         <UploadBox mediaType="video_upload" title="Video" subtitle="MP4, MOV" onClick={() => {
           setSelectedMediaType("video");
+          
           document.getElementById('videoUpload')?.click();
         }} onFileChange={(file) => {
           setMediaFile(file);

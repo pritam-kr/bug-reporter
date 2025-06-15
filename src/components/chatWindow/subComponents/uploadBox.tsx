@@ -20,6 +20,9 @@ const UploadBox = ({mediaType,title, subtitle, onClick, onFileChange}: UploadBox
         <span style={styles.icon}>{ICON_MAP[mediaType]}</span>
         <h3 style={styles.title}>{title}</h3>
         <p style={styles.subtitle}>{subtitle}</p>
+
+        {mediaType === "image" && (
+
         <input 
           type="file" 
           id="imageUpload" 
@@ -31,7 +34,26 @@ const UploadBox = ({mediaType,title, subtitle, onClick, onFileChange}: UploadBox
               onFileChange?.(file);
             }
           }}
+        />)}
+
+      {
+        mediaType === "video_upload" && (
+            <input 
+          type="file" 
+          id="videoUpload" 
+          accept="video/*" 
+          style={{ display: 'none' }} 
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) {
+              onFileChange?.(file);
+            }
+          }}
         />
+        )
+      }
+
+
       </div>
   )
 }

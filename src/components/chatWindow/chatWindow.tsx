@@ -1,7 +1,8 @@
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import UploadMedia from './subComponents/uploadMedia';
 import TakeScreenshot from './subComponents/takeScreenshot';
 import VideoRecord from './subComponents/recordVideo';
+import { FaPaperPlane } from 'react-icons/fa';
 
  interface ChatWindow {
     isOpen: boolean;
@@ -12,12 +13,14 @@ import VideoRecord from './subComponents/recordVideo';
   uploadMedia: "📁 Upload Media";
   takeScreenshot: "📸 Take Screenshot";
   recordVideo: "🎥 Record Video";
+  recordVoice: "🎤 Record Voice";
  }
 
  const MEDIA_OPTIONS: MediaOptions = {
   uploadMedia: "📁 Upload Media",
   takeScreenshot: "📸 Take Screenshot",
-  recordVideo: "🎥 Record Video"
+  recordVideo: "🎥 Record Video",
+  recordVoice: "🎤 Record Voice"
  }
 
 
@@ -25,11 +28,82 @@ const ChatWindow: React.FC<ChatWindow> = ({ onChatWindowClose }) => {
   const [messages, setMessages] = useState<string[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [selectedMedia, setSelectedMedia] = useState<string>(MEDIA_OPTIONS.takeScreenshot);
-
-
   const [mediaFile, setMediaFile] = useState<File | null>(null);
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const timerRef = useRef<number | null>(null);
+  const [recordingTime, setRecordingTime] = useState(0);
 
-  
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      chunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunksRef.current.push(e.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
+        setAudioBlob(audioBlob);
+        const audioUrl = URL.createObjectURL(audioBlob);
+        if (audioRef.current) {
+          audioRef.current.src = audioUrl;
+        }
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+
+      // Start timer
+      timerRef.current = window.setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+    } catch (err) {
+      console.error('Error accessing microphone:', err);
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    }
+  };
+
+  const togglePlayback = () => {
+    if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.pause();
+      } else {
+        audioRef.current.play();
+      }
+      setIsPlaying(!isPlaying);
+    }
+  };
+
+  const handleAudioEnded = () => {
+    setIsPlaying(false);
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,8 +116,16 @@ const ChatWindow: React.FC<ChatWindow> = ({ onChatWindowClose }) => {
   const handleMediaUsed = (media: string) => {
     setSelectedMedia(media);
     if(mediaFile) setMediaFile(null);
- 
+    if(audioBlob) setAudioBlob(null);
   }
+
+  const handleDeleteRecording = () => {
+    setAudioBlob(null);
+    setIsPlaying(false);
+    if (audioRef.current) {
+      audioRef.current.src = '';
+    }
+  };
 
   return (
     <div style={styles.container as React.CSSProperties}>
@@ -107,10 +189,56 @@ const ChatWindow: React.FC<ChatWindow> = ({ onChatWindowClose }) => {
               placeholder="Type a message..."
               style={styles.input}
             />
-            <button type="button" style={styles.micButton}>🎤</button>
+            <div style={styles.recordingControls}>
+              {isRecording && (
+                <div style={styles.recordingInfo}>
+                  <span style={styles.recordingDot}>●</span>
+                  {formatTime(recordingTime)}
+                </div>
+              )}
+              {audioBlob && !isRecording && (
+                <div style={styles.audioControls}>
+                  <button
+                    type="button"
+                    onClick={togglePlayback}
+                    style={{
+                      ...styles.playButton,
+                      backgroundColor: isPlaying ? '#dc3545' : '#28a745'
+                    }}
+                  >
+                    {isPlaying ? '⏸️' : '▶️'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeleteRecording}
+                    style={styles.deleteButton}
+                    title="Delete recording"
+                  >
+                    🗑️
+                  </button>
+                </div>
+              )}
+              <button 
+                type="button" 
+                style={{
+                  ...styles.micButton,
+                  backgroundColor: isRecording ? '#dc3545' : 'transparent'
+                }}
+                onClick={isRecording ? stopRecording : startRecording}
+              >
+                🎤
+              </button>
+            </div>
           </div>
-          <button type="submit" style={styles.sendButton}>Send</button>
+          <button type="submit" style={styles.sendButton}>
+            <FaPaperPlane />
+          </button>
         </form>
+        <audio 
+          ref={audioRef} 
+          onEnded={handleAudioEnded}
+          style={{ display: 'none' }}
+        />
       </div>
     </div>
   );
@@ -204,14 +332,71 @@ const styles = {
     outline: 'none',
     background: 'transparent'
   },
+  recordingControls: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px'
+  },
+  recordingInfo: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '5px',
+    fontSize: '14px',
+    color: '#666'
+  },
+  recordingDot: {
+    color: '#dc3545',
+    animation: 'blink 1s infinite'
+  },
   micButton: {
     background: 'none',
     border: 'none',
     cursor: 'pointer',
-    padding: '5px'
+    padding: '5px',
+    borderRadius: '50%',
+    transition: 'background-color 0.3s'
+  },
+  playButton: {
+    border: 'none',
+    cursor: 'pointer',
+    padding: '5px',
+    borderRadius: '50%',
+    transition: 'background-color 0.3s',
+    color: 'white',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '30px',
+    height: '30px'
+  },
+  audioControls: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '5px'
+  },
+  deleteButton: {
+    border: 'none',
+    cursor: 'pointer',
+    padding: '5px',
+    borderRadius: '50%',
+    transition: 'background-color 0.3s',
+    backgroundColor: 'transparent',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '30px',
+    height: '30px',
+    '&:hover': {
+      backgroundColor: '#f8f9fa'
+    }
   },
   sendButton: {
-    padding: '8px 15px',
+    padding: '8px',
+    width: '30px',
+    height: '30px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#007bff',
     color: 'white',
     border: 'none',

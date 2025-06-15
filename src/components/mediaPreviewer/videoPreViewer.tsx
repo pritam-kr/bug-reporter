@@ -3,13 +3,14 @@
 import React from 'react'
 
 interface VideoPreViewerProps {
-  mediaFile: File;
+  mediaFile?: File;
+  isBobUrl?: boolean | string;
 }
 
-export const VideoPreViewer = ({mediaFile}: VideoPreViewerProps) => {
+export const VideoPreViewer = ({mediaFile, isBobUrl=false}: VideoPreViewerProps) => {
   return (
     <video 
-    src={URL.createObjectURL(mediaFile)} 
+    src={typeof isBobUrl === 'string' ? isBobUrl : mediaFile ? URL.createObjectURL(mediaFile) : ''} 
     controls 
     style={styles.preview as React.CSSProperties}
   />

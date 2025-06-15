@@ -1,13 +1,14 @@
 import React from "react";
 
 interface ImagePreviewerProps {
-  mediaFile: File;
+  mediaFile?: File;
+  isBobUrl?: boolean | string;
 }
 
-export const ImagePreviewer = ({ mediaFile }: ImagePreviewerProps) => {
+const ImagePreviewer = ({ mediaFile, isBobUrl=false }: ImagePreviewerProps) => {
   return (
     <img
-      src={URL.createObjectURL(mediaFile)}
+      src={typeof isBobUrl === 'string' ? isBobUrl : mediaFile ? URL.createObjectURL(mediaFile) : ''}
       alt="Preview"
       style={styles.preview as React.CSSProperties}
     />
@@ -16,9 +17,9 @@ export const ImagePreviewer = ({ mediaFile }: ImagePreviewerProps) => {
 
 const styles = {
   preview: {
-    maxWidth: "100%",
-    maxHeight: "300px",
-    objectFit: "cover",
+    width: "100%",
+    height: "300px",
+    objectFit: "contain",
   },
 };
 

@@ -1,6 +1,8 @@
 import React, { useState } from 'react'
 import ImagePreviewer from '../../mediaPreviewer/imagePreviewer';
 import VideoPreViewer from '../../mediaPreviewer/videoPreViewer';
+import PreviewActions from './previewActions';
+import UploadBox from './uploadBox';
 
 interface UploadMediaProps {
   setMediaFile: (file: File | null) => void;
@@ -36,11 +38,7 @@ const UploadMedia: React.FC<UploadMediaProps> = ({setMediaFile, mediaFile, onCha
           {selectedMediaType === "image" ? <ImagePreviewer mediaFile={mediaFile} /> : <VideoPreViewer mediaFile={mediaFile} />}
         </div>
      
-          <div style={styles.buttonContainer}>
-            <button onClick={handleCancel} style={styles.secondaryButton}>Cancel</button>
-            <button onClick={handleRemove} style={styles.secondaryButton}>Remove</button>
-           { !isMediaUsed && <button onClick={handleUse} style={styles.primaryButton}>Use</button>}
-          </div>
+          <PreviewActions handleCancel={handleCancel} handleRemove={handleRemove} handleUse={handleUse} isMediaUsed={isMediaUsed} />
   
       </div>
     );
@@ -49,47 +47,19 @@ const UploadMedia: React.FC<UploadMediaProps> = ({setMediaFile, mediaFile, onCha
   return mediaFile ? renderPreview() : (
     <div style={styles.container}>
       <div style={styles.uploadSection}>
-        <div style={styles.uploadBox} onClick={() => {
+        <UploadBox mediaType="image" title="Image" subtitle="PNG, JPG" onClick={() => {
           setSelectedMediaType("image");
           document.getElementById('imageUpload')?.click();
-        }}>
-          <span style={styles.icon}>🖼️</span>
-          <h3 style={styles.title}>Image</h3>
-          <p style={styles.subtitle}>PNG, JPG</p>
-          <input 
-            type="file" 
-            id="imageUpload" 
-            accept="image/*" 
-            style={{ display: 'none' }} 
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) {
-                setMediaFile(file);
-              }
-            }}
-          />
-        </div>
+        }} onFileChange={(file) => {
+          setMediaFile(file);
+        }} />
 
-        <div style={styles.uploadBox} onClick={() => {
+        <UploadBox mediaType="video_upload" title="Video" subtitle="MP4, MOV" onClick={() => {
           setSelectedMediaType("video");
           document.getElementById('videoUpload')?.click();
-        }}>
-          <span style={styles.icon}>🎥</span>
-          <h3 style={styles.title}>Video</h3>
-          <p style={styles.subtitle}>MP4, MOV</p>
-          <input 
-            type="file" 
-            id="videoUpload" 
-            accept="video/*" 
-            style={{ display: 'none' }} 
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) {
-                setMediaFile(file);
-              }
-            }}
-          />
-        </div>
+        }} onFileChange={(file) => {
+          setMediaFile(file);
+        }} />
       </div>
     </div>
   );

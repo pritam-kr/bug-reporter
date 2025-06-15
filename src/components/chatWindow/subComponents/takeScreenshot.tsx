@@ -1,18 +1,133 @@
-import React, { useCallback, useRef, useState } from "react";
-import { FaCamera } from "react-icons/fa";
-import { MdCancel } from "react-icons/md";
+ 
+import html2canvas from "html2canvas";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import ImagePreviewer from "../../mediaPreviewer/imagePreviewer";
+import PreviewActions from "./previewActions";
+import UploadBox from "./uploadBox";
 
 interface TakeScreenshotProps {
   onChatWindowClose: () => void;
+  onCapture: (dataUrl: string) => void;
 }
 
-const TakeScreenshot: React.FC<TakeScreenshotProps> = ({ onChatWindowClose }) => {
+const TakeScreenshot: React.FC<TakeScreenshotProps> = ({ onChatWindowClose, onCapture }) => {
     const [showOverlay, setShowOverlay] = useState(false);
     const [hasSelection, setHasSelection] = useState(false);
     const [selectionRect, setSelectionRect] = useState({ x: 0, y: 0, width: 0, height: 0 });
     const overlayRef = useRef<HTMLDivElement>(null);
     const [isSelecting, setIsSelecting] = useState(false);
     const [startPos, setStartPos] = useState({ x: 0, y: 0 });
+    const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const streamRef = useRef<MediaStream | null>(null);
+    const [isCapturing, setIsCapturing] = useState(false);
+
+    const bobUrl = useRef<string | null>(null);
+
+    const formatTime = (seconds: number): string => {
+        const mins = Math.floor(seconds / 60)
+        const secs = seconds % 60
+        return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
+      }
+    
+ 
+
+    const captureTool = async () => {
+        if (!hasSelection || selectionRect.width < 10 || selectionRect.height < 10) {
+            alert("Please select a larger area")
+            return
+          }
+      
+          setIsCapturing(true)
+      
+          try {
+  
+     
+            // Store selection coordinates before hiding overlay
+            const captureRect = { ...selectionRect }
+      
+            // Hide the overlay first
+            setShowOverlay(false)
+      
+            // Hide the chat interface temporarily
+            const chatInterface = document.querySelector("[data-chat-interface]")
+            const originalDisplay = chatInterface ? (chatInterface as HTMLElement).style.display : ""
+      
+            if (chatInterface) {
+              ;(chatInterface as HTMLElement).style.display = "none"
+            }
+      
+            // Wait for UI to update
+            await new Promise((resolve) => setTimeout(resolve, 300))
+      
+            // Capture the entire screen
+            const canvas = await html2canvas(document.body, {
+              useCORS: true,
+              allowTaint: true,
+              scale: 1,
+              logging: false,
+              width: window.innerWidth,
+              height: window.innerHeight,
+              scrollX: 0,
+              scrollY: 0,
+            })
+      
+            // Restore chat interface
+            if (chatInterface) {
+              ;(chatInterface as HTMLElement).style.display = originalDisplay
+            }
+      
+            // Create cropped canvas with the selected area
+            const croppedCanvas = document.createElement("canvas")
+            const ctx = croppedCanvas.getContext("2d")
+      
+            if (!ctx) {
+              throw new Error("Could not get canvas context")
+            }
+      
+            // Set the cropped canvas size
+            croppedCanvas.width = captureRect.width
+            croppedCanvas.height = captureRect.height
+      
+            // Draw the selected portion
+            ctx.drawImage(
+              canvas,
+              captureRect.x, // source x
+              captureRect.y, // source y
+              captureRect.width, // source width
+              captureRect.height, // source height
+              0, // destination x
+              0, // destination y
+              captureRect.width, // destination width
+              captureRect.height, // destination height
+            )
+      
+            const dataUrl = croppedCanvas.toDataURL("image/png", 1.0)
+            bobUrl.current = dataUrl;
+      
+  
+            // Reset state
+            setSelectionRect({ x: 0, y: 0, width: 0, height: 0 })
+            setHasSelection(false)
+      
+            onCapture(dataUrl)
+          } catch (error) {
+            console.error("Error capturing screenshot:", error)
+            alert("Failed to capture screenshot. Please try again.")
+      
+            // Reset overlay state on error
+            setShowOverlay(false)
+            setSelectionRect({ x: 0, y: 0, width: 0, height: 0 })
+            setHasSelection(false)
+            bobUrl.current = null;
+          } finally {
+            setIsCapturing(false)
+          }
+    }
+
+ 
+    const captureScreenshot = useCallback(async () => {
+        captureTool()
+    }, [hasSelection, onCapture, selectionRect])
 
     const handleMouseDown = useCallback(
         (e: React.MouseEvent) => {
@@ -67,9 +182,43 @@ const TakeScreenshot: React.FC<TakeScreenshotProps> = ({ onChatWindowClose }) =>
         }
       }, [isSelecting, selectionRect])
 
+      useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+          if (e.key === "Escape") {
+            if (showOverlay) {
+              setShowOverlay(false)
+              setSelectionRect({ x: 0, y: 0, width: 0, height: 0 })
+              setHasSelection(false)
+              bobUrl.current = null;
+            } else {
+              onChatWindowClose()
+            }
+          } else if (e.key === "Enter" && showOverlay && hasSelection && !isCapturing ) {
+            e.preventDefault()
+            captureScreenshot()
+          }
+        }
+    
+        window.addEventListener("keydown", handleKeyDown)
+        return () => window.removeEventListener("keydown", handleKeyDown)
+      }, [onChatWindowClose, showOverlay, hasSelection, isCapturing, captureScreenshot])
+    
+      useEffect(() => {
+        return () => {
+          // Clean up when component unmounts
+          if (timerRef.current) {
+            clearInterval(timerRef.current)
+          }
+          if (streamRef.current) {
+            streamRef.current.getTracks().forEach((track) => track.stop())
+          }
+        }
+      }, [])
+
     const resetSelection = () => {
         setSelectionRect({ x: 0, y: 0, width: 0, height: 0 })
         setHasSelection(false)
+        bobUrl.current = null;
         if (showOverlay) {
           // Keep overlay open but reset selection
           setIsSelecting(false)
@@ -78,33 +227,34 @@ const TakeScreenshot: React.FC<TakeScreenshotProps> = ({ onChatWindowClose }) =>
         }
       }
     
-      const cancelSelection = () => {
+    const cancelSelection = () => {
         setShowOverlay(false)
         setSelectionRect({ x: 0, y: 0, width: 0, height: 0 })
+        bobUrl.current = null;
         setHasSelection(false)
         setIsSelecting(false)
       }
 
-      const handleCapture = () => {
-       
-      }
 
   return (
     <React.Fragment>
-    <div style={styles.container}>
-      <div style={styles.uploadSection}>
-        <div style={styles.uploadBox} onClick={() => {
-            setShowOverlay(true)
-            // onChatWindowClose()
-        }}>
-          <span style={styles.icon}>
-            <FaCamera />
-          </span>
-          <h3 style={styles.title}>Take Screenshot</h3>
-          <p style={styles.subtitle}>Ready to take a screenshot</p>
-        </div>
-      </div>
+{bobUrl.current ? (
+  <div style={styles.previewContainer}>
+    <div style={styles.previewWrapper}>
+     <ImagePreviewer isBobUrl={bobUrl.current} />
+     </div>
+     <PreviewActions handleCancel={() => ""} handleRemove={() => ""} handleUse={() => ""}   />
+  </div>
+) : (
+  <div style={styles.container}>
+    <div style={styles.uploadSection}>
+        <UploadBox mediaType="screenshot" title="Take Screenshot" subtitle="Ready to take a screenshot" onClick={() => {
+          setShowOverlay(true)
+        }} />
+        
     </div>
+  </div>
+)}
 
     {showOverlay && (
     <div
@@ -144,7 +294,7 @@ const TakeScreenshot: React.FC<TakeScreenshotProps> = ({ onChatWindowClose }) =>
       {/* Instructions overlay */}
       <div style={styles.instructions as React.CSSProperties}>
         {hasSelection
-          ? "Selection ready! Press ENTER or click Capture button"
+          ? "Selection ready! Press ENTER to capture"
           : "Click and drag to select area • Press ESC to cancel"}
       </div>
 
@@ -156,13 +306,13 @@ const TakeScreenshot: React.FC<TakeScreenshotProps> = ({ onChatWindowClose }) =>
         Cancel
       </button>
 
-      <button
-        onClick={resetSelection}
+      {/* <button
+        onClick={() => captureTool()}
         style={styles.captureButton as React.CSSProperties}
       >
         Capture
       </button>
-      
+       */}
 
     </div>
   )
@@ -271,7 +421,7 @@ const styles = {
     transition: 'background-color 0.2s',
     cursor: 'pointer',
     border: 'none',
-    zIndex: 1000
+    zIndex: 9999999
   },
   captureButton: {
     position: 'absolute',
@@ -284,12 +434,35 @@ const styles = {
     transition: 'background-color 0.2s',
     cursor: 'pointer',
     border: 'none',
-    zIndex: 1000
+    zIndex: 9999999
   },
   closeIcon: {
     height: '16px',
     width: '16px'
   }
+,
+  previewContainer: {
+    // width: '100%',
+    // height: '100%',
+    display: 'flex',
+    flexDirection: 'column' as const,
+    alignItems: 'center',
+    gap: '20px',
+    padding: '20px',
+    backgroundColor: '#ffffff',
+    borderRadius: '12px',
+    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+  },
+  previewWrapper: {
+    width: '100%',
+    height: '90%',
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    borderRadius: '8px',
+    overflow: 'hidden',
+  },
 };
 
 export default TakeScreenshot;

@@ -62,7 +62,9 @@ const ChatWindow: React.FC<ChatWindow> = ({ onChatWindowClose }) => {
               mediaFile={mediaFile} 
             />
           )}
-          {selectedMedia === MEDIA_OPTIONS.takeScreenshot && <TakeScreenshot onChatWindowClose={() => onChatWindowClose()} />}
+          {selectedMedia === MEDIA_OPTIONS.takeScreenshot && <TakeScreenshot onChatWindowClose={() => onChatWindowClose()} onCapture={(dataUrl) => {
+            console.log(dataUrl, 'dataUrl')
+          }} />}
         </div>
 
         {/* Media Options */}
@@ -123,8 +125,8 @@ const styles = {
     right: '40px'
   },
   chatWindow: {
-    width: '400px',
-    height: '600px',
+    width: '350px',
+    height: '450px',
     backgroundColor: 'white',
     borderRadius: '10px',
     boxShadow: '0 0 10px 0 rgba(0, 0, 0, 0.1)',
